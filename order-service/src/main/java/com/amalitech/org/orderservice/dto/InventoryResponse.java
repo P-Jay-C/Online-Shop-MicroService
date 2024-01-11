@@ -1,4 +1,4 @@
-package com.amalitech.org.inventoryservice.dto;
+package com.amalitech.org.orderservice.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
