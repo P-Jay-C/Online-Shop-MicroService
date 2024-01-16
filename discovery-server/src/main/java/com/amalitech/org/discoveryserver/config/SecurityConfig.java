@@ -1,44 +1,51 @@
 package com.amalitech.org.discoveryserver.config;
 
-import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
-import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.NoOpPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+
+import java.util.Collections;
 
 @Configuration
 @EnableWebSecurity
-public  class SecurityConfig {
-    String username;
-    String password;
+public class SecurityConfig {
 
+    @Value("${eureka.username}")
+    private String username;
+    @Value("${eureka.password}")
+    private String password;
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {
-        return httpSecurity.csrf(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(authorizeRequest -> authorizeRequest.anyRequest().authenticated())
-                .httpBasic(Customizer.withDefaults())
-                .build();
+        httpSecurity.csrf(AbstractHttpConfigurer::disable)
+                .authorizeHttpRequests(authorizeRequest ->
+                        authorizeRequest.requestMatchers("/eureka/**").permitAll()
+                                .anyRequest().authenticated())
+                .httpBasic(Customizer.withDefaults());
+        return httpSecurity.build();
+    }
+
+
+    @Bean
+    public UserDetailsService userDetailsService() {
+        User user = new User(username, password, Collections.singleton(new SimpleGrantedAuthority("USER")));
+        return new InMemoryUserDetailsManager(user);
     }
 
     @Bean
-    public void configure(AuthenticationManagerBuilder authenticationManagerBuilder) throws Exception {
-
-        authenticationManagerBuilder.inMemoryAuthentication()
-                .passwordEncoder(NoOpPasswordEncoder.getInstance())
-                .withUser(username).password(password)
-                .authorities("USER");
-
+    public PasswordEncoder passwordEncoder() {
+        return NoOpPasswordEncoder.getInstance();
     }
 }
 
