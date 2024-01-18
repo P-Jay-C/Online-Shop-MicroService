@@ -8,6 +8,9 @@ import com.amalitech.org.orderservice.model.Order;
 import com.amalitech.org.orderservice.model.OrderLineItems;
 import com.amalitech.org.orderservice.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,8 +27,10 @@ import java.util.UUID;
 public class OrderService {
     private final OrderRepository orderRepository;
     private final WebClient.Builder webClientBuilder;
-    private final KafkaTemplate<String, OrderPlacedEvent> kafkaTemplate;
-    public String placeOrder(OrderRequest orderRequest){
+    private final KafkaTemplate<UUID, OrderPlacedEvent> kafkaTemplate;
+    private final Logger LOGGER = LoggerFactory.getLogger(OrderService.class);
+
+    public void placeOrder(UUID key, OrderRequest orderRequest){
         Order order = new Order();
         order.setOrderNumber(UUID.randomUUID().toString());
 
@@ -48,12 +53,24 @@ public class OrderService {
                 .bodyToMono(InventoryResponse[].class)
                 .block();
 
-        boolean allProductInStock = Arrays.stream(Objects.requireNonNull(inventoryResponseArray)).allMatch(InventoryResponse::isInStock);
+        boolean allProductsInStock = Arrays.stream(Objects.requireNonNull(inventoryResponseArray))
+                .allMatch(InventoryResponse::isInStock);
 
-        if (allProductInStock) {
+        if (allProductsInStock) {
             orderRepository.save(order);
-            kafkaTemplate.send("notificationTopic", new OrderPlacedEvent(order.getOrderNumber()));
-            return "Order Placed Successfully";
+
+            OrderPlacedEvent orderPlacedEvent = new OrderPlacedEvent(order.getOrderNumber());
+            // publish Order Placed Event
+            var future = kafkaTemplate.send("notificationTopic", key, orderPlacedEvent);
+            future.whenComplete((sendResult, exception) -> {
+                if (exception != null){
+                    LOGGER.error(exception.getMessage());
+                    future.completeExceptionally(exception);
+                }else {
+                    future.complete(sendResult);
+                }
+                LOGGER.info( "Order id is : "+ orderPlacedEvent.getOrderNumber());
+            });
         } else {
             throw new IllegalArgumentException("Product is not in stock, please try again later");
         }

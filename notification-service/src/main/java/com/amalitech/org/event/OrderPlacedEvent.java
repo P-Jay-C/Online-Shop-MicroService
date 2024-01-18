@@ -1,4 +1,4 @@
-package com.amalitech.org.orderservice.event;
+package com.amalitech.org.event;
 
 import lombok.*;
 
